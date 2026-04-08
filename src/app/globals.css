@@ -1,26 +1,162 @@
+/**
+ * @file globals.css
+ * Global styles, design tokens, animations, and utility classes.
+ *
+ * Structure:
+ *   1. Tailwind import
+ *   2. @theme — design tokens (colours, fonts) consumed across the app
+ *   3. Keyframe animations
+ *   4. Animation utility classes
+ *   5. Paper-lines texture
+ *   6. 3D perspective helper
+ *   7. Print overrides
+ */
+
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ─── 1. Design tokens ──────────────────────────────────────────────────────
+ *
+ * Defined in @theme so Tailwind v4 exposes them as both CSS custom properties
+ * (var(--color-blue)) and as design-token references in utility classes.
+ *
+ * --color-blue is overridden at runtime in useCalendarState via:
+ *   document.documentElement.style.setProperty("--color-blue", accentColor)
+ * This lets each month carry its own accent colour without prop drilling.
+ * ────────────────────────────────────────────────────────────────────────── */
+@theme {
+  /* Accent — overridden per-month at runtime (see useCalendarState.ts) */
+  --color-blue:       #1da1e0;
+  --color-blue-dark:  #0d7ab5;  /* hover / active state for accent elements  */
+  --color-blue-light: #e8f6fd;  /* range highlight background                */
+  --color-blue-mid:   #5bbfe8;  /* range highlight border                    */
+
+  /* Surfaces */
+  --color-page-bg:    #e8eef2;  /* outer page / wall background              */
+  --color-spiral:     #d0d8de;  /* binding strip base colour                 */
+  --color-paper:      #fafcfe;  /* notes panel background                    */
+  --color-lines:      #e8f0f4;  /* ruled-line colour in the notes textarea   */
+  --color-border:     #dde5ea;  /* generic dividers and input borders        */
+
+  /* Typography */
+  --font-display: "Barlow Condensed", sans-serif;  /* month name, headings   */
+  --font-body:    "Barlow", sans-serif;            /* UI labels, notes text  */
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ─── 2. Keyframe animations ────────────────────────────────────────────────
+ *
+ * Page-peel technique:
+ *   A white overlay covers the new month's content. CSS clip-path shrinks the
+ *   visible area of the overlay from one edge to the other, revealing the new
+ *   content underneath — exactly like lifting a real calendar page.
+ *
+ *   clip-path: inset(top right bottom left)
+ *     • page-peel-up:   bottom inset 0%→100%  — overlay vanishes upward
+ *     • page-peel-down: top    inset 0%→100%  — overlay vanishes downward
+ *
+ *   drop-shadow follows the clip edge automatically, creating a moving shadow
+ *   line at the peel point for depth.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/** Forward navigation: old page peels up, new month revealed from below. */
+@keyframes page-peel-up {
+  0%   { clip-path: inset(0 0 0 0);    filter: drop-shadow(0  6px 10px rgba(0,0,0,0.28)); }
+  100% { clip-path: inset(0 0 100% 0); filter: drop-shadow(0  2px  4px rgba(0,0,0,0.06)); }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/** Backward navigation: old page peels down, new month revealed from above. */
+@keyframes page-peel-down {
+  0%   { clip-path: inset(0 0 0 0);    filter: drop-shadow(0 -6px 10px rgba(0,0,0,0.28)); }
+  100% { clip-path: inset(100% 0 0 0); filter: drop-shadow(0 -2px  4px rgba(0,0,0,0.06)); }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/**
+ * calendar-swing — damped pendulum effect played once on page load.
+ *
+ * Simulates a wall calendar that was just hung on the nail and is
+ * settling to rest. The transform-origin is set to the nail-head
+ * position (50% -17px relative to the wrapper top edge) so the card
+ * rotates around the screw, not its own centre.
+ *
+ * Amplitude schedule (degrees): -9 → +6.5 → -4 → +2.2 → -1.2 → +0.6 → 0
+ * Each half-swing loses ~35% of the previous amplitude — realistic
+ * damping ratio for a light card on a smooth wall.
+ */
+@keyframes calendar-swing {
+  0%   { transform: rotate(-9deg);   }
+  20%  { transform: rotate(6.5deg);  }
+  38%  { transform: rotate(-4deg);   }
+  54%  { transform: rotate(2.2deg);  }
+  68%  { transform: rotate(-1.2deg); }
+  80%  { transform: rotate(0.6deg);  }
+  90%  { transform: rotate(-0.2deg); }
+  100% { transform: rotate(0deg);    }
+}
+
+/** Notes save button — pulses the "tap end date" hint while picking. */
+@keyframes pulse-hint {
+  0%, 100% { opacity: 1;   }
+  50%       { opacity: 0.4; }
+}
+
+/** Hero image — fades in once the <img> fires its load event. */
+@keyframes img-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ─── 3. Animation utility classes ─────────────────────────────────────────
+ *
+ * Duration must match PEEL_DURATION_MS in useCalendarState.ts (600 ms).
+ * cubic-bezier(0.4, 0, 0.2, 1) is Material Design's "standard" easing curve —
+ * fast start, smooth deceleration, giving the peel a natural physical feel.
+ * ────────────────────────────────────────────────────────────────────────── */
+.animate-page-peel-up   { animation: page-peel-up      600ms cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+.animate-page-peel-down { animation: page-peel-down    600ms cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+.animate-pulse-hint     { animation: pulse-hint          1.2s ease-in-out                 infinite; }
+.animate-img-fade       { animation: img-fade            0.5s ease                        forwards; }
+/*
+ * Pivot is the nail-head centre: 17 px above the wrapper top edge
+ * (nail SVG is -top-30px; head centre is at y=13 inside the SVG → -30+13 = -17px).
+ * animation-fill-mode: both → card starts pre-rotated while page is painting,
+ * so the very first frame the user sees is already mid-swing.
+ */
+.animate-calendar-swing {
+  animation: calendar-swing 1.8s ease-out both;
+  transform-origin: 50% -17px;
+}
+
+/* ─── 4. Paper-lines texture ────────────────────────────────────────────────
+ *
+ * Applied to the notes textarea wrapper to simulate ruled notebook paper.
+ * A repeating-linear-gradient draws a 1 px line every 24 px.
+ * background-position: 0 28px offsets the first line below the top padding.
+ * ────────────────────────────────────────────────────────────────────────── */
+.paper-lines {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent        0px,
+    transparent        23px,
+    var(--color-lines) 23px,
+    var(--color-lines) 24px
+  );
+  background-position: 0 28px;
+}
+
+/* ─── 5. 3D perspective container ───────────────────────────────────────────
+ *
+ * Applied to the calendar card so that any 3D transform children (future
+ * use) are rendered with a realistic vanishing-point perspective.
+ * ────────────────────────────────────────────────────────────────────────── */
+.perspective-wrap {
+  perspective: 1200px;
+}
+
+/* ─── 6. Print overrides ────────────────────────────────────────────────────
+ *
+ * Hides decorative chrome (binding, nail, nav arrows) when printing.
+ * Removes box-shadow from the card so the printed output looks clean on paper.
+ * ────────────────────────────────────────────────────────────────────────── */
+@media print {
+  .no-print     { display: none !important; }
+  .print-shadow { box-shadow: none !important; }
 }
