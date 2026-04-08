@@ -4,7 +4,7 @@
 
 **Author:** Vijay Kumar Tholeti  
 **GitHub:** [@Vijay-2155](https://github.com/Vijay-2155)  
-**Live Demo:** _[Add Vercel URL after deployment]_
+**Live Demo:** https://wall-calendar-amber.vercel.app
 
 ---
 
@@ -46,23 +46,15 @@ The calendar renders as a physical wall calendar hung on a nail — complete wit
 
 ## Architecture
 
-### No external calendar or date libraries
-All date arithmetic lives in [`src/lib/dates.ts`](src/lib/dates.ts) — pure functions that are trivial to unit-test without any framework.
+- **No external libraries for dates** — all date logic is written from scratch in `src/lib/dates.ts`, keeping the bundle light and the logic easy to follow.
 
-### State isolated in custom hooks
-- [`useCalendarState`](src/hooks/useCalendarState.ts) — month navigation, date range picking, flip animation state
-- [`useNotes`](src/hooks/useNotes.ts) — localStorage read/write with a saved-flash UX
+- **All state in custom hooks** — `useCalendarState` handles navigation and range picking, `useNotes` handles saving to localStorage. Components just receive props and render — no business logic inside them.
 
-Presentational components receive everything as props and hold zero `useState`.
+- **Grid is pre-computed** — `buildCells()` figures out every cell's state (today, selected, in range, holiday, overflow) before passing it to the grid. The grid component itself just loops and renders.
 
-### `buildCells()` pre-computes the entire grid
-[`buildCells()`](src/lib/dates.ts) returns a flat array of ~42 typed cell descriptors (previous-month overflow, current-month days, next-month overflow) with all boolean flags pre-resolved (`isToday`, `isSelected`, `inRange`, `isHoliday`, etc.). `CalendarGrid` and `DayCell` are purely declarative over this array.
+- **Page-peel animation** — when you navigate, the new month loads instantly in the background. The old month's image and title are shown on a layer on top, which then peels away using a CSS animation — so it looks like lifting a real calendar page.
 
-### Page-peel technique
-`useCalendarState` snapshots `prevMonth`/`prevYear` before committing the new month. `WallCalendar` renders the new month immediately beneath a `z-30` overlay that replicates the old month's hero image and title strip. A CSS `clip-path: inset()` animation shrinks the overlay from one edge to the other — old content visibly peels away, new content is already rendered underneath.
-
-### Accent colours via CSS custom property
-`useCalendarState` calls `document.documentElement.style.setProperty("--color-blue", color)` on every navigation. Every accent-coloured element reads `var(--color-blue)`, so the entire UI repaints with no prop drilling or context.
+- **Per-month colour theming** — each month has its own accent colour. It's applied as a single CSS variable on the root element, so every button, highlight, and heading updates automatically with no extra code.
 
 ---
 
