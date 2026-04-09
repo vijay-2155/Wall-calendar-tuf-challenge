@@ -1,107 +1,251 @@
 "use client";
+import { useRef, useState, useEffect } from "react";
 /**
  * @file NotesPanel.tsx
- * Sidebar panel for writing and saving notes against a calendar context.
+ * Two-mode sidebar:
+ *  1. Plans list — all notes for this month (no selection).
+ *  2. Edit mode — contenteditable rich-text editor for the selected date/range.
  *
- * The "context" (shown above the textarea) dynamically reflects what the user
- * has selected:
- *   - A date range → "Jan 5 – Jan 10"
- *   - A single day → "Jan 5"
- *   - Nothing      → "January 2025" (whole month)
- *
- * This component is purely presentational — all state lives in `useNotes` and
- * `useCalendarState`, passed in as props.
+ * Uses document.execCommand for bold/italic so text renders visually styled
+ * without any markdown syntax appearing in the editor.
  */
 
-/** Props accepted by {@link NotesPanel}. */
+interface MonthPlan { key: string; day: number; text: string; }
+
 interface NotesPanelProps {
-  /** Identifies which note to display / save. Derived from the current selection. */
-  noteKey: string;
-  /** Current value of the textarea (controlled). */
-  noteText: string;
-  /** Updates `noteText` as the user types. */
-  setNoteText: (v: string) => void;
-  /** Persists `noteText` to localStorage under `noteKey`. */
-  onSave: () => void;
-  /** `true` for ~1.8 s after a successful save; drives the "✓ Saved!" label. */
-  saved: boolean;
-  /** Total number of non-empty notes saved across all keys. */
-  savedCount: number;
-  /** `true` while the user is picking a range end date (shows the picking hint). */
-  picking: boolean;
-  /** `true` when at least a start date has been selected. */
-  hasSelection: boolean;
-  /** Clears the current date selection. Only shown when `hasSelection` is true. */
-  onClear?: () => void;
+  noteKey:       string;
+  noteText:      string;
+  setNoteText:   (v: string) => void;
+  autoSaved:     boolean;
+  monthPlans:    MonthPlan[];
+  onPlanClick:   (day: number) => void;
+  onDeletePlan:  (key: string) => void;
+  picking:       boolean;
+  hasSelection:  boolean;
+  onClear?:      () => void;
 }
 
-/**
- * Sidebar note editor displayed to the left of the calendar grid.
- *
- * The textarea uses a CSS `paper-lines` background (defined in `globals.css`)
- * to mimic a ruled notepad aesthetic that complements the wall-calendar theme.
- */
+const EMOJIS = [
+  "🎂","🎉","🏥","💊","✈️","🚗",
+  "🏠","📞","💰","🎓","❤️","🙏",
+  "⭐","🎁","📅","🕐","🍽️","💼",
+  "🏋️","🎯","👨‍👩‍👧","🌸","🙌","📝",
+];
+
 export function NotesPanel({
   noteKey, noteText, setNoteText,
-  onSave, saved, savedCount,
+  autoSaved, monthPlans, onPlanClick, onDeletePlan,
   picking, hasSelection, onClear,
 }: NotesPanelProps) {
+
+  // ── All hooks at the top — Rules of Hooks requires no conditional calls ────
+  const editorRef  = useRef<HTMLDivElement>(null);
+  const [showEmoji, setShowEmoji] = useState(false);
+
+  /**
+   * Sync the editor's innerHTML when the note key changes or when the store
+   * hydrates. Skips the update while the user is actively typing (editor focused)
+   * to avoid resetting the cursor position.
+   */
+  useEffect(() => {
+    if (editorRef.current && document.activeElement !== editorRef.current) {
+      editorRef.current.innerHTML = noteText;
+    }
+  }, [noteText, noteKey]);
+
+  const handleInput = () => setNoteText(editorRef.current?.innerHTML ?? "");
+
+  const applyFormat = (command: "bold" | "italic") => {
+    editorRef.current?.focus();
+    document.execCommand(command, false);
+    setNoteText(editorRef.current?.innerHTML ?? "");
+  };
+
+  const insertBullet = () => {
+    editorRef.current?.focus();
+    document.execCommand("insertText", false, "• ");
+    setNoteText(editorRef.current?.innerHTML ?? "");
+  };
+
+  const insertEmoji = (emoji: string) => {
+    editorRef.current?.focus();
+    document.execCommand("insertText", false, emoji);
+    setNoteText(editorRef.current?.innerHTML ?? "");
+    setShowEmoji(false);
+  };
+
+  const toolbarBtn = "w-7 h-7 flex items-center justify-center rounded border border-[var(--color-border)] bg-white hover:bg-[var(--color-lines)] transition-colors cursor-pointer";
+
+  // ── Plans list ─────────────────────────────────────────────────────────────
+  if (!hasSelection) {
+    return (
+      <aside
+        className="flex flex-col gap-2 p-3 bg-[var(--color-paper)] border-r border-[var(--color-border)] w-[160px] min-w-[140px] max-sm:w-full max-sm:border-r-0 max-sm:border-b"
+        aria-label="Month plans"
+      >
+        <p className="text-[11px] font-bold uppercase tracking-[1.5px] text-[var(--color-blue)]">
+          This Month
+        </p>
+
+        {monthPlans.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-2 pb-4">
+            <span className="text-2xl">📝</span>
+            <p className="text-[10px] text-[#bbb] text-center leading-snug">
+              Click a date to<br />write a note
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1.5 overflow-y-auto flex-1">
+            {monthPlans.map(({ key, day, text }) => (
+              <div
+                key={key}
+                className="rounded-sm overflow-hidden group"
+                style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}
+              >
+                {/* Accent header row: date label + delete button */}
+                <div
+                  className="flex items-center justify-between px-2 py-[3px]"
+                  style={{ background: "var(--color-blue)" }}
+                >
+                  <p className="text-[9px] font-bold text-white tracking-wide">{key}</p>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onDeletePlan(key); }}
+                    title="Delete note"
+                    className="w-4 h-4 flex items-center justify-center rounded-full text-white opacity-60 hover:opacity-100 hover:bg-white/20 transition-all cursor-pointer"
+                    aria-label={`Delete note for ${key}`}
+                  >
+                    <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-2.5 h-2.5">
+                      <line x1="2" y1="2" x2="10" y2="10" />
+                      <line x1="10" y1="2" x2="2" y2="10" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Note body — click to open for editing */}
+                <button
+                  onClick={() => onPlanClick(day)}
+                  className="w-full text-left bg-[#fffbee] border-l-[3px] border-[var(--color-blue)] pl-2 pr-1 py-1.5 cursor-pointer hover:bg-[#fff8e0] transition-colors"
+                  aria-label={`Edit note for ${key}`}
+                >
+                  <p
+                    className="text-[10px] text-[#555] leading-snug line-clamp-3"
+                    dangerouslySetInnerHTML={{ __html: text }}
+                  />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </aside>
+    );
+  }
+
+  // ── Edit mode ──────────────────────────────────────────────────────────────
   return (
     <aside
       className="flex flex-col gap-2 p-3 bg-[var(--color-paper)] border-r border-[var(--color-border)] w-[160px] min-w-[140px] max-sm:w-full max-sm:border-r-0 max-sm:border-b"
       aria-label="Notes panel"
     >
-      {/* Section heading */}
       <p className="text-[11px] font-bold uppercase tracking-[1.5px] text-[var(--color-blue)]">
         Notes
       </p>
 
-      {/* Active context label (day / range / month) */}
-      <p className="text-[10px] text-[#999] leading-snug min-h-[14px]">
-        {noteKey}
-      </p>
+      <p className="text-[10px] text-[#999] leading-snug min-h-[14px]">{noteKey}</p>
 
-      {/* Ruled textarea — paper-lines provides the CSS horizontal-line background */}
+      {/* Formatting toolbar */}
+      <div className="flex items-center gap-1">
+        {/* Bold */}
+        <button
+          title="Bold"
+          className={toolbarBtn}
+          onMouseDown={(e) => { e.preventDefault(); applyFormat("bold"); }}
+        >
+          <strong className="text-[12px] text-[#444]">B</strong>
+        </button>
+
+        {/* Italic */}
+        <button
+          title="Italic"
+          className={toolbarBtn}
+          onMouseDown={(e) => { e.preventDefault(); applyFormat("italic"); }}
+        >
+          <em className="text-[12px] text-[#444]">I</em>
+        </button>
+
+        {/* Bullet */}
+        <button
+          title="Bullet point"
+          className={toolbarBtn}
+          onMouseDown={(e) => { e.preventDefault(); insertBullet(); }}
+        >
+          <span className="text-[14px] text-[#444] leading-none">•</span>
+        </button>
+
+        {/* Emoji picker */}
+        <div className="relative ml-auto">
+          <button
+            title="Insert emoji"
+            className={toolbarBtn}
+            onMouseDown={(e) => { e.preventDefault(); setShowEmoji((v) => !v); }}
+          >
+            <span className="text-[14px] leading-none">😊</span>
+          </button>
+
+          {showEmoji && (
+            <div
+              className="absolute bottom-full right-0 mb-1 bg-white border border-[var(--color-border)] rounded-md p-1.5 grid grid-cols-6 gap-0.5 z-50"
+              style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.15)", width: "172px" }}
+            >
+              {EMOJIS.map((emoji) => (
+                <button
+                  key={emoji}
+                  title={emoji}
+                  className="w-6 h-6 flex items-center justify-center rounded text-[13px] hover:bg-[var(--color-lines)] cursor-pointer transition-colors"
+                  onMouseDown={(e) => { e.preventDefault(); insertEmoji(emoji); }}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Rich-text editor (contenteditable) */}
       <div className="relative flex-1 min-h-[110px] bg-white rounded-sm border border-[var(--color-border)] overflow-hidden paper-lines">
-        <textarea
-          value={noteText}
-          onChange={(e) => setNoteText(e.target.value)}
-          placeholder="Write notes here..."
-          rows={8}
-          aria-label="Notes text area"
-          className="relative z-10 w-full h-full min-h-[120px] p-2 resize-none bg-transparent border-none outline-none text-[12px] text-[#333] leading-6 font-[family-name:var(--font-body)]"
+        {/* Placeholder — shown when editor is empty */}
+        {!noteText && (
+          <p className="absolute top-2 left-2 text-[11px] text-[#bbb] pointer-events-none z-0 select-none">
+            Write here...
+          </p>
+        )}
+        <div
+          ref={editorRef}
+          contentEditable
+          suppressContentEditableWarning
+          onInput={handleInput}
+          aria-label="Note editor"
+          className="relative z-10 w-full h-full min-h-[120px] p-2 outline-none text-[12px] text-[#333] leading-6 font-[family-name:var(--font-body)] overflow-y-auto"
         />
       </div>
 
-      {/* Save button — label toggles to "✓ Saved!" for 1.8 s after saving */}
-      <button
-        onClick={onSave}
-        className="w-full py-2 rounded-sm text-white text-[13px] font-semibold tracking-wide cursor-pointer bg-[var(--color-blue)] hover:bg-[var(--color-blue-dark)] active:scale-[0.97] transition-all duration-150"
-      >
-        {saved ? "\u2713 Saved!" : "Save Note"}
-      </button>
+      {/* Auto-save status */}
+      <p className="text-[9px] text-center" style={{ color: autoSaved ? "#4caf50" : "#ccc" }}>
+        {autoSaved ? "✓ saved" : "auto-saves as you type"}
+      </p>
 
-      {/* Clear selection — only visible when a date or range is active */}
       {hasSelection && (
         <button
           onClick={onClear}
           className="w-full py-1.5 rounded-sm text-[11px] text-[#888] border border-[var(--color-border)] bg-transparent hover:bg-[var(--color-lines)] transition-colors cursor-pointer"
         >
-          Clear selection
+          ← Back to plans
         </button>
       )}
 
-      {/* Picking hint — pulses while awaiting the range end date */}
       {picking && (
         <p className="text-[10px] font-bold text-center text-[var(--color-blue)] animate-pulse-hint">
-          &#x2190; tap end date
-        </p>
-      )}
-
-      {/* Saved note count — shown once at least one note exists */}
-      {savedCount > 0 && (
-        <p className="mt-auto pt-1 text-[9px] text-center text-[#bbb]">
-          {savedCount} note{savedCount !== 1 ? "s" : ""} saved
+          ← tap end date
         </p>
       )}
     </aside>

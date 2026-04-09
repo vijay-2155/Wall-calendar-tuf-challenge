@@ -155,6 +155,19 @@ export function useCalendarState() {
     setHover(null);
   }, []);
 
+  /**
+   * Selects a single date directly (e.g. when tapping a note in the plans list).
+   * Sets both start and end to the same date so the cell is highlighted.
+   *
+   * @param date - The date to select.
+   */
+  const selectDate = useCallback((date: Date) => {
+    setStart(date);
+    setEnd(date);
+    setPicking(false);
+    setHover(null);
+  }, []);
+
   // ── Keyboard navigation ───────────────────────────────────────────────────
   /** Global keyboard shortcuts: ← prev month, → next month, Escape clear selection. */
   useEffect(() => {
@@ -175,6 +188,6 @@ export function useCalendarState() {
     flipping, flipDir,
     imgLoaded,
     setHover, setImgLoaded,
-    navigate, handleDayClick, clearSelection,
+    navigate, handleDayClick, clearSelection, selectDate,
   };
 }

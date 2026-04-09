@@ -21,6 +21,8 @@ import type { CalendarCell } from "@/types/calendar";
 interface DayCellProps {
   /** Pre-computed cell data produced by `buildCells()`. */
   cell: CalendarCell;
+  /** Note text saved for this date, if any — rendered as tiny inline text on the cell. */
+  noteText?: string;
   /** Called when the user clicks a current-month day. */
   onClick: () => void;
   /** Called when the cursor enters a current-month day (range preview). */
@@ -35,10 +37,15 @@ interface DayCellProps {
  * Only cells with `type === "cur"` are interactive. Overflow cells (`"prev"` /
  * `"next"`) render as muted numbers with no click handling.
  */
-export function DayCell({ cell, onClick, onMouseEnter, onMouseLeave }: DayCellProps) {
+export function DayCell({ cell, noteText, onClick, onMouseEnter, onMouseLeave }: DayCellProps) {
   const { day, type, isToday, isStart, isEnd, isInRange, isWeekend, holiday } = cell;
   const [hovered, setHovered] = useState(false);
   const isCur = type === "cur";
+
+  // Strip HTML tags from note so the tooltip shows plain readable text.
+  const plainNote = noteText
+    ? noteText.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim()
+    : "";
 
   // ── Derive number-circle styles ───────────────────────────────────────────
   let numBg    = "transparent";
@@ -106,6 +113,59 @@ export function DayCell({ cell, onClick, onMouseEnter, onMouseLeave }: DayCellPr
         >
           {holiday}
         </span>
+      )}
+
+      {/* Note indicator — amber dot when a note exists; redesigned tooltip on hover. */}
+      {plainNote && isCur && (
+        <>
+          <div
+            className="w-[4px] h-[4px] rounded-full mt-[2px] opacity-90"
+            style={{ background: (isStart || isEnd) ? "rgba(255,255,255,0.8)" : "#f0a500" }}
+          />
+          {hovered && (
+            <div
+              className="absolute z-30 pointer-events-none"
+              style={{ bottom: "calc(100% + 5px)", left: "50%", transform: "translateX(-50%)" }}
+              role="tooltip"
+            >
+              {/* Themed bubble */}
+              <div
+                className="text-white text-[10px] leading-snug rounded-md overflow-hidden"
+                style={{ boxShadow: "0 4px 14px rgba(0,0,0,0.2)", minWidth: "80px", maxWidth: "160px" }}
+              >
+                {/* Accent header strip */}
+                <div
+                  className="px-2 py-[3px] text-[8px] font-bold tracking-wide opacity-80"
+                  style={{ background: "var(--color-blue)" }}
+                >
+                  📝 Note
+                </div>
+                {/* Body */}
+                <div
+                  className="px-2 py-1.5 text-[#333] bg-[#fffbee] border-l-[3px] border-[var(--color-blue)]"
+                  style={{
+                    wordBreak: "break-word",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 3,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }}
+                >
+                  {plainNote}
+                </div>
+              </div>
+              {/* Arrow */}
+              <div
+                className="mx-auto w-0 h-0"
+                style={{
+                  borderLeft: "5px solid transparent",
+                  borderRight: "5px solid transparent",
+                  borderTop: "5px solid #fffbee",
+                }}
+              />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

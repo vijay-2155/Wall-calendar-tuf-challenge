@@ -1,14 +1,13 @@
 "use client";
 /**
  * @file useNotes.ts
- * Hook for reading and persisting calendar notes in `localStorage`.
+ * Hook for reading and auto-persisting calendar notes in `localStorage`.
  *
  * Notes are keyed by a context string (`noteKey`) that encodes whether the
- * note belongs to a single day, a date range, or an entire month. This lets
- * the same storage object hold all three categories without collision.
+ * note belongs to a single day, a date range, or an entire month.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import type { NotesStore } from "@/types/calendar";
 
 /** `localStorage` key under which all calendar notes are stored as JSON. */
@@ -18,30 +17,23 @@ const STORAGE_KEY = "tuf-wall-calendar-notes";
  * Manages note text for a given calendar context (`noteKey`).
  *
  * ### Behaviour
- * - Hydrates from `localStorage` once on mount; subsequent navigations read
- *   from in-memory state to avoid repeated JSON parses.
- * - The textarea value (`noteText`) is synchronised whenever `noteKey` changes.
- * - Saving an empty note removes the key from storage (avoids accumulating blanks).
- * - The `saved` flag flips `true` for 1.8 s after a successful save, allowing
- *   the UI to show a transient "✓ Saved!" confirmation without a separate toast.
+ * - Hydrates from `localStorage` once on mount.
+ * - Syncs the textarea value whenever `noteKey` changes.
+ * - Auto-saves 600 ms after the user stops typing — no explicit save button needed.
+ * - Saving an empty note removes the key from storage.
+ * - `autoSaved` flips `true` for 1.5 s after each auto-save to show a transient "✓" indicator.
  *
- * @param noteKey - Identifies the note scope. Examples:
- *   - `"Jan 5"` for a single selected day
- *   - `"Jan 5 – Jan 10"` for a selected range
- *   - `"January 2025"` for the whole month
- *
- * @returns
- * - `noteText` / `setNoteText` — controlled textarea value.
- * - `saveNote` — persists the current text (or removes the key if blank).
- * - `saved` — transient flag for showing a save confirmation.
- * - `savedCount` — total number of non-empty notes across all keys.
+ * @param noteKey - Identifies the note scope (e.g. `"Apr 8"`, `"Apr 5 – Apr 10"`, `"April 2026"`).
+ * @returns `noteText` / `setNoteText` — controlled textarea value.
+ *          `autoSaved` — transient flag for showing a save confirmation.
+ *          `store` — the full notes map (used by parent to derive month plans).
  */
 export function useNotes(noteKey: string) {
-  const [store,    setStore]    = useState<NotesStore>({});
-  const [noteText, setNoteText] = useState("");
-  const [saved,    setSaved]    = useState(false);
+  const [store,     setStore]     = useState<NotesStore>({});
+  const [noteText,  setNoteText]  = useState("");
+  const [autoSaved, setAutoSaved] = useState(false);
 
-  // ── Hydrate from localStorage (runs once on mount) ────────────────────────
+  // ── Hydrate from localStorage (runs once on mount) ─────────────────────────
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -51,42 +43,52 @@ export function useNotes(noteKey: string) {
     }
   }, []);
 
-  // ── Sync textarea when the active note key changes ────────────────────────
+  // ── Sync textarea when the active note key or store changes ────────────────
   useEffect(() => {
     setNoteText(store[noteKey] ?? "");
-    setSaved(false);
+    setAutoSaved(false);
   }, [noteKey, store]);
 
-  // ── Persist note to localStorage ──────────────────────────────────────────
+  // ── Auto-save with 600 ms debounce ─────────────────────────────────────────
   /**
-   * Saves the current `noteText` under `noteKey`.
-   * Removes the key from storage when the text is blank to avoid stale entries.
-   * Shows a transient "saved" confirmation for 1.8 seconds.
+   * Fires 600 ms after the last keystroke. Saves `noteText` under `noteKey`,
+   * or removes the key if the text is blank.
    */
-  const saveNote = useCallback(() => {
+  useEffect(() => {
+    // Skip if nothing has changed since the last save.
+    if (noteText === (store[noteKey] ?? "")) return;
+
+    const timer = setTimeout(() => {
+      const updated = { ...store };
+      // Strip HTML tags before checking for emptiness so a lone <br> doesn't get saved.
+      const plainText = noteText.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+      if (plainText) {
+        updated[noteKey] = noteText;
+      } else {
+        delete updated[noteKey];
+      }
+      setStore(updated);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      } catch {
+        // Silently handle storage quota or private-browsing restrictions.
+      }
+      setAutoSaved(true);
+      setTimeout(() => setAutoSaved(false), 1500);
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [noteText, noteKey, store]);
+
+  /** Deletes the note stored under `key` from localStorage and in-memory store. */
+  const deleteNote = (key: string) => {
     const updated = { ...store };
-
-    if (noteText.trim()) {
-      updated[noteKey] = noteText;
-    } else {
-      // Empty note — remove the entry rather than storing a blank string.
-      delete updated[noteKey];
-    }
-
+    delete updated[key];
     setStore(updated);
-
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    } catch {
-      // Silently handle storage quota exceeded or private-browsing restrictions.
-    }
+    } catch { /* ignore */ }
+  };
 
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1800);
-  }, [store, noteKey, noteText]);
-
-  /** Number of notes that have been saved (non-empty values across all keys). */
-  const savedCount = Object.values(store).filter(Boolean).length;
-
-  return { noteText, setNoteText, saveNote, saved, savedCount };
+  return { noteText, setNoteText, autoSaved, store, deleteNote };
 }

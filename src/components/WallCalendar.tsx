@@ -38,7 +38,7 @@ import { SpiralBinding }    from "@/components/SpiralBinding";
 import { HeroImage }        from "@/components/HeroImage";
 import { CalendarGrid }     from "@/components/CalendarGrid";
 import { NotesPanel }       from "@/components/NotesPanel";
-import { MONTHS, formatShort, isSameDay } from "@/lib/dates";
+import { MONTHS, formatShort, isSameDay, getDaysInMonth } from "@/lib/dates";
 import { MONTH_IMAGES, MONTH_ACCENT_COLORS } from "@/lib/monthImages";
 
 /**
@@ -67,6 +67,21 @@ export function WallCalendar() {
   const notes = useNotes(noteKey);
 
   /**
+   * All notes written on individual dates of the current month, in day order.
+   * Used by NotesPanel to render the "This Month's Plans" list.
+   */
+  const monthPlans = useMemo(() => {
+    const prefix = MONTHS[cal.month].slice(0, 3);
+    const days   = getDaysInMonth(cal.year, cal.month);
+    const plans  = [];
+    for (let d = 1; d <= days; d++) {
+      const key = `${prefix} ${d}`;
+      if (notes.store[key]) plans.push({ key, day: d, text: notes.store[key] });
+    }
+    return plans;
+  }, [notes.store, cal.month, cal.year]);
+
+  /**
    * CSS animation class applied to the peel overlay.
    * - `animate-page-peel-up`   — forward navigation (page lifts upward).
    * - `animate-page-peel-down` — backward navigation (page drops downward).
@@ -78,11 +93,13 @@ export function WallCalendar() {
 
   return (
     <main
-      className="min-h-screen flex items-center justify-center p-8 max-sm:p-3"
+      className="min-h-screen flex items-center justify-center p-8 max-sm:p-0"
       style={{ background: "linear-gradient(160deg, #dce4ea 0%, #c8d4dc 50%, #d4dde4 100%)" }}
+      onClick={cal.clearSelection}
     >
-      {/* Outer wrapper — constrains max-width, position context for nail, pivot for swing */}
-      <div className="relative w-full max-w-[460px] animate-calendar-swing">
+      {/* Outer wrapper — constrains max-width, position context for nail, pivot for swing.
+          stopPropagation so clicks inside the card don't bubble up and clear the selection. */}
+      <div className="relative w-full max-w-[460px] animate-calendar-swing max-sm:animate-none">
 
         {/*
          * Wall screw — SVG Phillips-head screw rendered in 3D layers:
@@ -95,7 +112,7 @@ export function WallCalendar() {
          *      thin highlight stripe to simulate slot depth
          *   7. Two-tier specular highlight on the head surface
          */}
-        <div className="no-print absolute -top-[30px] left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+        <div className="no-print absolute -top-[30px] left-1/2 -translate-x-1/2 z-20 pointer-events-none max-sm:hidden">
           <svg width="30" height="44" viewBox="0 0 30 44" xmlns="http://www.w3.org/2000/svg">
             <defs>
               {/* Chrome-like radial gradient, light source top-left */}
@@ -305,14 +322,15 @@ export function WallCalendar() {
           </div>
 
           {/* ── Bottom row: notes sidebar + calendar grid ──────────────────── */}
-          <div className="flex items-stretch max-sm:flex-col">
+          <div className="flex items-stretch max-sm:flex-col" onClick={(e) => e.stopPropagation()}>
             <NotesPanel
               noteKey={noteKey}
               noteText={notes.noteText}
               setNoteText={notes.setNoteText}
-              onSave={notes.saveNote}
-              saved={notes.saved}
-              savedCount={notes.savedCount}
+              autoSaved={notes.autoSaved}
+              monthPlans={monthPlans}
+              onPlanClick={(day) => cal.selectDate(new Date(cal.year, cal.month, day))}
+              onDeletePlan={notes.deleteNote}
               picking={cal.picking}
               hasSelection={!!cal.startDate}
               onClear={cal.clearSelection}
@@ -328,6 +346,9 @@ export function WallCalendar() {
               picking={cal.picking}
               onDayClick={cal.handleDayClick}
               onDayHover={cal.setHover}
+              notesStore={notes.store}
+              hasSelection={!!cal.startDate}
+              onClear={cal.clearSelection}
             />
           </div>
 

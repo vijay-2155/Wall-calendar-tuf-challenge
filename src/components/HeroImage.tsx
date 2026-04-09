@@ -45,10 +45,7 @@ export function HeroImage({
   month, year, imgLoaded, onLoad, onPrev, onNext, today,
 }: HeroImageProps) {
   return (
-    <div
-      className="relative overflow-hidden bg-[#1a3a52]"
-      style={{ height: "252px" }}
-    >
+    <div className="relative overflow-hidden bg-[#1a3a52] h-[252px] max-sm:h-[160px]">
       {/*
        * Full-bleed photo.
        * `key={month}` ensures Next.js treats each month as a distinct image,
@@ -79,9 +76,14 @@ export function HeroImage({
         <polygon points="0,60 0,0 253,60" fill="var(--color-blue)" />
       </svg>
 
-      {/* Today's date badge — localised to Indian English (DD MMM YYYY). */}
-      <div className="no-print absolute top-3 right-3 z-10 bg-white/90 rounded px-2.5 py-1 text-[11px] font-semibold tracking-wide text-[var(--color-blue)]">
-        {today.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+      {/* Today's date badge — full date on desktop, day + month only on mobile. */}
+      <div className="no-print absolute top-3 right-3 z-10 bg-white/90 rounded px-2 py-1 text-[11px] font-semibold tracking-wide text-[var(--color-blue)] whitespace-nowrap">
+        <span className="max-sm:hidden">
+          {today.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+        </span>
+        <span className="sm:hidden">
+          {today.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+        </span>
       </div>
 
       {/* Ghost prev/next tap zones over the photo (mobile convenience targets). */}

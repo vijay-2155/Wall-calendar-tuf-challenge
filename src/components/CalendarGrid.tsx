@@ -16,9 +16,10 @@
  *   ● selected  ■ in range  • holiday  SAT weekend  ← legend
  */
 
-import { buildCells, DAY_HEADERS } from "@/lib/dates";
-import { HOLIDAYS }                from "@/lib/holidays";
-import { DayCell }                 from "@/components/DayCell";
+import { buildCells, DAY_HEADERS, formatShort } from "@/lib/dates";
+import { HOLIDAYS }                              from "@/lib/holidays";
+import { DayCell }                               from "@/components/DayCell";
+import type { NotesStore }                       from "@/types/calendar";
 
 /** Props accepted by {@link CalendarGrid}. */
 interface CalendarGridProps {
@@ -40,6 +41,12 @@ interface CalendarGridProps {
   onDayClick: (date: Date) => void;
   /** Callback fired when the cursor enters / leaves a current-month day. */
   onDayHover: (date: Date | null) => void;
+  /** Full notes store — used to look up each day's saved note for inline display. */
+  notesStore: NotesStore;
+  /** `true` when at least a start date is selected — shows the clear button. */
+  hasSelection: boolean;
+  /** Clears the current date selection. */
+  onClear: () => void;
 }
 
 /**
@@ -51,7 +58,8 @@ interface CalendarGridProps {
  */
 export function CalendarGrid({
   year, month, today, startDate, endDate,
-  hoverDate, picking, onDayClick, onDayHover,
+  hoverDate, picking, onDayClick, onDayHover, notesStore,
+  hasSelection, onClear,
 }: CalendarGridProps) {
   const cells = buildCells({
     year, month, today, startDate, endDate, hoverDate, picking,
@@ -85,6 +93,7 @@ export function CalendarGrid({
           <DayCell
             key={i}
             cell={cell}
+            noteText={cell.type === "cur" && cell.date ? (notesStore[formatShort(cell.date)] || undefined) : undefined}
             onClick={()     => cell.type === "cur" && cell.date && onDayClick(cell.date)}
             onMouseEnter={() => cell.type === "cur" && cell.date && onDayHover(cell.date)}
             onMouseLeave={() => onDayHover(null)}
@@ -92,8 +101,8 @@ export function CalendarGrid({
         ))}
       </div>
 
-      {/* Legend — explains the visual encoding used in the grid */}
-      <div className="mt-3 pt-2 border-t border-[var(--color-border)] flex gap-3 flex-wrap">
+      {/* Legend + clear button row */}
+      <div className="mt-3 pt-2 border-t border-[var(--color-border)] flex items-center gap-3 flex-wrap">
         {[
           { shape: "circle", label: "selected" },
           { shape: "square", label: "in range"  },
@@ -108,6 +117,21 @@ export function CalendarGrid({
             <span className="text-[9px] text-[#888]">{label}</span>
           </div>
         ))}
+
+        {/* Clear selection — always visible on desktop and mobile when active */}
+        {hasSelection && (
+          <button
+            onClick={onClear}
+            className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold cursor-pointer transition-colors"
+            style={{ background: "var(--color-blue)", color: "#fff" }}
+            aria-label="Clear date selection"
+          >
+            <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-2 h-2">
+              <line x1="2" y1="2" x2="8" y2="8" /><line x1="8" y1="2" x2="2" y2="8" />
+            </svg>
+            Clear
+          </button>
+        )}
       </div>
 
     </div>
