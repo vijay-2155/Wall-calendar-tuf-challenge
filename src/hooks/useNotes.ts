@@ -80,6 +80,21 @@ export function useNotes(noteKey: string) {
     return () => clearTimeout(timer);
   }, [noteText, noteKey, store]);
 
+  /** Saves `noteText` immediately under `noteKey` without waiting for the debounce. */
+  const saveNote = () => {
+    const updated = { ...store };
+    const plainText = noteText.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+    if (plainText) {
+      updated[noteKey] = noteText;
+    } else {
+      delete updated[noteKey];
+    }
+    setStore(updated);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch { /* ignore */ }
+    setAutoSaved(true);
+    setTimeout(() => setAutoSaved(false), 1500);
+  };
+
   /** Deletes the note stored under `key` from localStorage and in-memory store. */
   const deleteNote = (key: string) => {
     const updated = { ...store };
@@ -90,5 +105,5 @@ export function useNotes(noteKey: string) {
     } catch { /* ignore */ }
   };
 
-  return { noteText, setNoteText, autoSaved, store, deleteNote };
+  return { noteText, setNoteText, autoSaved, saveNote, store, deleteNote };
 }

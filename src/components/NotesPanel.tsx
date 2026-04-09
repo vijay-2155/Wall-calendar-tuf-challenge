@@ -17,6 +17,7 @@ interface NotesPanelProps {
   noteText:      string;
   setNoteText:   (v: string) => void;
   autoSaved:     boolean;
+  onSave:        () => void;
   monthPlans:    MonthPlan[];
   onPlanClick:   (day: number) => void;
   onDeletePlan:  (key: string) => void;
@@ -34,7 +35,7 @@ const EMOJIS = [
 
 export function NotesPanel({
   noteKey, noteText, setNoteText,
-  autoSaved, monthPlans, onPlanClick, onDeletePlan,
+  autoSaved, onSave, monthPlans, onPlanClick, onDeletePlan,
   picking, hasSelection, onClear,
 }: NotesPanelProps) {
 
@@ -229,10 +230,14 @@ export function NotesPanel({
         />
       </div>
 
-      {/* Auto-save status */}
-      <p className="text-[9px] text-center" style={{ color: autoSaved ? "#4caf50" : "#ccc" }}>
-        {autoSaved ? "✓ saved" : "auto-saves as you type"}
-      </p>
+      {/* Save button */}
+      <button
+        onClick={onSave}
+        className="w-full py-2 rounded-sm text-white text-[13px] font-semibold tracking-wide cursor-pointer transition-all duration-150 active:scale-[0.97]"
+        style={{ background: autoSaved ? "#4caf50" : "var(--color-blue)" }}
+      >
+        {autoSaved ? "✓ Saved!" : "Save Note"}
+      </button>
 
       {hasSelection && (
         <button

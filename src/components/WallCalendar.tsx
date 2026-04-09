@@ -328,6 +328,7 @@ export function WallCalendar() {
               noteText={notes.noteText}
               setNoteText={notes.setNoteText}
               autoSaved={notes.autoSaved}
+              onSave={notes.saveNote}
               monthPlans={monthPlans}
               onPlanClick={(day) => cal.selectDate(new Date(cal.year, cal.month, day))}
               onDeletePlan={notes.deleteNote}
