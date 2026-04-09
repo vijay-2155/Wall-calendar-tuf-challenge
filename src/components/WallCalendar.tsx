@@ -67,17 +67,36 @@ export function WallCalendar() {
   const notes = useNotes(noteKey);
 
   /**
-   * All notes written on individual dates of the current month, in day order.
+   * All notes for the current month (single-day and multi-day ranges), in day order.
    * Used by NotesPanel to render the "This Month's Plans" list.
    */
   const monthPlans = useMemo(() => {
     const prefix = MONTHS[cal.month].slice(0, 3);
     const days   = getDaysInMonth(cal.year, cal.month);
-    const plans  = [];
+    const plans: { key: string; day: number; endDay?: number; text: string }[] = [];
+
+    // Single-day notes: "Apr 8"
     for (let d = 1; d <= days; d++) {
       const key = `${prefix} ${d}`;
       if (notes.store[key]) plans.push({ key, day: d, text: notes.store[key] });
     }
+
+    // Range notes: "Apr 5 – Apr 10"
+    for (const key of Object.keys(notes.store)) {
+      if (!key.includes("\u2013")) continue;
+      const parts = key.split(" \u2013 ");
+      if (parts.length !== 2) continue;
+      const [startPart, endPart] = parts;
+      if (!startPart.startsWith(`${prefix} `)) continue;
+      const startDay = parseInt(startPart.slice(prefix.length + 1), 10);
+      const endPrefix = endPart.split(" ")[0];
+      const endDay   = parseInt(endPart.slice(endPrefix.length + 1), 10);
+      if (isNaN(startDay) || isNaN(endDay)) continue;
+      plans.push({ key, day: startDay, endDay, text: notes.store[key] });
+    }
+
+    // Sort by start day
+    plans.sort((a, b) => a.day - b.day);
     return plans;
   }, [notes.store, cal.month, cal.year]);
 
@@ -328,9 +347,15 @@ export function WallCalendar() {
               noteText={notes.noteText}
               setNoteText={notes.setNoteText}
               autoSaved={notes.autoSaved}
-              onSave={notes.saveNote}
+              onSave={(html) => notes.saveNote(html)}
               monthPlans={monthPlans}
-              onPlanClick={(day) => cal.selectDate(new Date(cal.year, cal.month, day))}
+              onPlanClick={(day, endDay) => {
+                if (endDay !== undefined) {
+                  cal.selectRange(new Date(cal.year, cal.month, day), new Date(cal.year, cal.month, endDay));
+                } else {
+                  cal.selectDate(new Date(cal.year, cal.month, day));
+                }
+              }}
               onDeletePlan={notes.deleteNote}
               picking={cal.picking}
               hasSelection={!!cal.startDate}

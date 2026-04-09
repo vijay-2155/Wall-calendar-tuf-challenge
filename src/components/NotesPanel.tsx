@@ -10,16 +10,16 @@ import { useRef, useState, useEffect } from "react";
  * without any markdown syntax appearing in the editor.
  */
 
-interface MonthPlan { key: string; day: number; text: string; }
+interface MonthPlan { key: string; day: number; endDay?: number; text: string; }
 
 interface NotesPanelProps {
   noteKey:       string;
   noteText:      string;
   setNoteText:   (v: string) => void;
   autoSaved:     boolean;
-  onSave:        () => void;
+  onSave:        (currentHtml: string) => void;
   monthPlans:    MonthPlan[];
-  onPlanClick:   (day: number) => void;
+  onPlanClick:   (day: number, endDay?: number) => void;
   onDeletePlan:  (key: string) => void;
   picking:       boolean;
   hasSelection:  boolean;
@@ -97,7 +97,7 @@ export function NotesPanel({
           </div>
         ) : (
           <div className="flex flex-col gap-1.5 overflow-y-auto flex-1">
-            {monthPlans.map(({ key, day, text }) => (
+            {monthPlans.map(({ key, day, endDay, text }) => (
               <div
                 key={key}
                 className="rounded-sm overflow-hidden group"
@@ -124,7 +124,7 @@ export function NotesPanel({
 
                 {/* Note body — click to open for editing */}
                 <button
-                  onClick={() => onPlanClick(day)}
+                  onClick={() => onPlanClick(day, endDay)}
                   className="w-full text-left bg-[#fffbee] border-l-[3px] border-[var(--color-blue)] pl-2 pr-1 py-1.5 cursor-pointer hover:bg-[#fff8e0] transition-colors"
                   aria-label={`Edit note for ${key}`}
                 >
@@ -230,9 +230,9 @@ export function NotesPanel({
         />
       </div>
 
-      {/* Save button */}
+      {/* Save button — reads innerHTML directly from the editor so stale state never causes a missed save */}
       <button
-        onClick={onSave}
+        onClick={() => onSave(editorRef.current?.innerHTML ?? "")}
         className="w-full py-2 rounded-sm text-white text-[13px] font-semibold tracking-wide cursor-pointer transition-all duration-150 active:scale-[0.97]"
         style={{ background: autoSaved ? "#4caf50" : "var(--color-blue)" }}
       >

@@ -145,6 +145,16 @@ export function useCalendarState() {
   }, [picking, startDate]);
 
   /**
+   * Selects a date range directly (e.g. when tapping a range note in the plans list).
+   */
+  const selectRange = useCallback((start: Date, end: Date) => {
+    setStart(start);
+    setEnd(end);
+    setPicking(false);
+    setHover(null);
+  }, []);
+
+  /**
    * Clears the entire date-range selection and exits picking mode.
    * Also bound to the Escape key via the global keyboard handler.
    */
@@ -188,6 +198,6 @@ export function useCalendarState() {
     flipping, flipDir,
     imgLoaded,
     setHover, setImgLoaded,
-    navigate, handleDayClick, clearSelection, selectDate,
+    navigate, handleDayClick, clearSelection, selectDate, selectRange,
   };
 }

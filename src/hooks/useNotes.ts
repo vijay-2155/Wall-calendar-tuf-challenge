@@ -43,11 +43,15 @@ export function useNotes(noteKey: string) {
     }
   }, []);
 
-  // ── Sync textarea when the active note key or store changes ────────────────
+  // ── Sync text when key or store changes (handles hydration + key switch) ───
   useEffect(() => {
     setNoteText(store[noteKey] ?? "");
-    setAutoSaved(false);
   }, [noteKey, store]);
+
+  // ── Reset saved flash only when switching to a different note ────────────
+  useEffect(() => {
+    setAutoSaved(false);
+  }, [noteKey]);
 
   // ── Auto-save with 600 ms debounce ─────────────────────────────────────────
   /**
@@ -80,16 +84,22 @@ export function useNotes(noteKey: string) {
     return () => clearTimeout(timer);
   }, [noteText, noteKey, store]);
 
-  /** Saves `noteText` immediately under `noteKey` without waiting for the debounce. */
-  const saveNote = () => {
+  /**
+   * Saves immediately under `noteKey` without waiting for the debounce.
+   * Accepts an optional `currentHtml` override so the caller can pass the
+   * freshest DOM content directly — avoids stale-state issues with contenteditable.
+   */
+  const saveNote = (currentHtml?: string) => {
+    const textToSave = currentHtml ?? noteText;
     const updated = { ...store };
-    const plainText = noteText.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+    const plainText = textToSave.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
     if (plainText) {
-      updated[noteKey] = noteText;
+      updated[noteKey] = textToSave;
     } else {
       delete updated[noteKey];
     }
     setStore(updated);
+    if (currentHtml !== undefined) setNoteText(currentHtml); // keep state in sync
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch { /* ignore */ }
     setAutoSaved(true);
     setTimeout(() => setAutoSaved(false), 1500);
